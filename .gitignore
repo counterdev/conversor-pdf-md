@@ -1,0 +1,9 @@
+pdf2md_app.py
+*.exe
+__pycache__/
+build/
+dist/
+*.spec
+*.lnk
+*.ps1
+*.bat
