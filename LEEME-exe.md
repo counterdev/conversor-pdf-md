@@ -10,8 +10,11 @@ de formato).
 Doble clic en **`ConversorPDF.exe`**.
 
 No hay que instalar nada: ni Python, ni librerías, ni permisos de
-administrador. La carpeta `_internal` que está al lado tiene que
-acompañar siempre al ejecutable, así que movelos juntos.
+administrador. Es un archivo único y autónomo: podés moverlo, copiarlo
+o dejarlo donde quieras.
+
+El primer arranque tarda unos segundos porque el programa se descomprime
+en una carpeta temporal. Los siguientes son más rápidos.
 
 > Windows puede mostrar un aviso de "Windows protegió tu PC" la primera
 > vez, porque el ejecutable no tiene firma digital. Hacé clic en

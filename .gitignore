@@ -7,6 +7,7 @@ __pycache__/
 build/
 dist/
 *.spec
+!ConversorPDF.spec
 
 # Scripts locales sueltos (los launchers del proyecto van versionados,
 # ver las excepciones de abajo)

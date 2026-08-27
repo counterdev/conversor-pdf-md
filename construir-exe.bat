@@ -7,15 +7,15 @@ cd /d "%~dp0"
 
 set "VENV=.venv"
 set "PY_EXE=%VENV%\Scripts\python.exe"
-set "SALIDA=dist\ConversorPDF"
+set "SALIDA=dist\ConversorPDF.exe"
 
 echo.
 echo  ══════════════════════════════════════════════════════
 echo    Construir el ejecutable (.exe)
 echo  ══════════════════════════════════════════════════════
 echo.
-echo  Genera una versión que funciona en cualquier PC con
-echo  Windows, sin necesidad de instalar Python.
+echo  Genera UN SOLO archivo que funciona en cualquier PC
+echo  con Windows, sin instalar Python ni nada mas.
 echo.
 echo  Tarda 1-3 minutos. Volvé a ejecutarlo cada vez que
 echo  cambies pdf2md_app.py.
@@ -41,40 +41,28 @@ if errorlevel 1 (
 echo  Construyendo...
 echo.
 
-"%PY_EXE%" -m PyInstaller ^
-    --noconfirm ^
-    --windowed ^
-    --name ConversorPDF ^
-    --icon icono.ico ^
-    --collect-all pymupdf ^
-    --collect-all pymupdf4llm ^
-    --collect-all tkinterdnd2 ^
-    --exclude-module marker ^
-    --exclude-module torch ^
-    --exclude-module PyInstaller ^
-    pdf2md_app.py
-
+rem La receta esta en ConversorPDF.spec: ahi se define el .exe unico
+rem y se descarta el analisis de layout de PyMuPDF (~50 MB que la app no usa)
+"%PY_EXE%" -m PyInstaller --noconfirm ConversorPDF.spec
 if errorlevel 1 goto :error
-if not exist "%SALIDA%\ConversorPDF.exe" goto :error
+if not exist "%SALIDA%" goto :error
 
-rem El LEEME viaja junto al ejecutable
-if exist "LEEME-exe.md" copy /y "LEEME-exe.md" "%SALIDA%\LEEME.md" >nul
+rem El LEEME queda al lado por si querés repartirlo junto al .exe
+if exist "LEEME-exe.md" copy /y "LEEME-exe.md" "dist\LEEME.md" >nul
 
 echo.
 echo  ══════════════════════════════════════════════════════
 echo    Listo
 echo  ══════════════════════════════════════════════════════
 echo.
-echo  El ejecutable quedó en:
-echo    %SALIDA%\ConversorPDF.exe
+for %%F in ("%SALIDA%") do echo    %%~fF  (%%~zF bytes)
 echo.
-echo  Para repartirlo, comprimí la carpeta COMPLETA
-echo    %SALIDA%
-echo  (el .exe necesita la carpeta _internal que está al lado).
+echo  Es un archivo unico y autonomo: se puede subir, enviar
+echo  o copiar tal cual. No necesita carpetas al lado.
 echo.
 
 choice /c SN /n /m "  ¿Abrir la carpeta ahora? (S/N): "
-if not errorlevel 2 start "" "%SALIDA%"
+if not errorlevel 2 start "" "dist"
 
 echo.
 exit /b 0

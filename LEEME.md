@@ -115,10 +115,11 @@ icono.ico  construir-exe.bat  LEEME-exe.md
 
 No incluyas `.venv`, `build` ni `dist`: se regeneran solos.
 
-**B) Ejecutable `.exe`** (~200 MB). Funciona en cualquier Windows sin
-instalar nada. Ejecutá **`construir-exe.bat`** y comprimí la carpeta
-`dist\ConversorPDF` **completa** — el `.exe` necesita la carpeta
-`_internal` que tiene al lado.
+**B) Ejecutable `.exe`** (~59 MB). Un archivo único que funciona en
+cualquier Windows sin instalar nada. Ejecutá **`construir-exe.bat`** y
+repartí `dist\ConversorPDF.exe` tal cual: no necesita carpetas al lado,
+así que se puede subir a Drive, mandar por WeTransfer o publicar como
+release de GitHub.
 
 Reconstruilo cada vez que cambies `pdf2md_app.py`.
 
