@@ -47,9 +47,6 @@ rem y se descarta el analisis de layout de PyMuPDF (~50 MB que la app no usa)
 if errorlevel 1 goto :error
 if not exist "%SALIDA%" goto :error
 
-rem El LEEME queda al lado por si querés repartirlo junto al .exe
-if exist "LEEME-exe.md" copy /y "LEEME-exe.md" "dist\LEEME.md" >nul
-
 echo.
 echo  ══════════════════════════════════════════════════════
 echo    Listo
