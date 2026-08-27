@@ -3,7 +3,7 @@
 Aplicación de escritorio para Windows que convierte PDFs a **Markdown** o
 **texto plano**, con modo Obsidian (frontmatter YAML + limpieza de formato).
 
-Arrastrás los archivos, elegís el formato y listo.
+Arrastras los archivos, eliges el formato y listo.
 
 ---
 
@@ -19,22 +19,22 @@ una carpeta temporal. Los siguientes son más rápidos.
 
 > **Windows protegió tu PC**
 > Puede aparecer la primera vez, porque el ejecutable no tiene firma digital.
-> Hacé clic en **Más información → Ejecutar de todas formas**.
+> Haz clic en **Más información → Ejecutar de todas formas**.
 
 ---
 
 ## Cómo se usa
 
-1. Arrastrá los PDFs a la zona punteada, o usá **Browse Files...**
-   Podés cargar varios a la vez: se procesan de a dos en paralelo.
-2. Elegí el **motor de conversión**.
-3. Elegí dónde guardar, el **formato** y si querés el **modo Obsidian**.
-4. **Iniciar Conversión**.
+1. Arrastra los PDFs a la zona punteada, o usa **Agregar archivos...**
+   Puedes cargar varios a la vez: se procesan de a dos en paralelo.
+2. Elige el **motor de conversión**.
+3. Elige dónde guardar, el **formato** y si quieres el **modo Obsidian**.
+4. **Iniciar conversión**.
 
 El resultado lleva el mismo nombre del PDF. Si ya existe un archivo con ese
 nombre, se guarda como `nombre_1` — nunca se sobrescribe nada.
 
-Para sacar archivos de la cola: seleccionalos y apretá `Supr`.
+Para sacar archivos de la cola: selecciónalos y aprieta `Supr`.
 
 ---
 
@@ -46,7 +46,7 @@ Para sacar archivos de la cola: seleccionalos y apretá `Supr`.
 | **Texto plano (.txt)** | El mismo contenido sin marcas: los títulos quedan como líneas sueltas, las listas mantienen su guión y las tablas pasan a columnas separadas por tabulación. |
 
 El **modo Obsidian** solo aplica a `.md`, así que se desactiva solo cuando
-elegís `.txt`.
+eliges `.txt`.
 
 En los `.md`, el texto que venía resaltado en el PDF se guarda como
 `==texto==`, la sintaxis nativa de resaltado de Obsidian. En los `.txt` el
@@ -64,12 +64,12 @@ title: "Nombre del documento"
 source: documento.pdf
 created: 2026-08-27 14:30
 tags: [pdf-import]
-engine: Fast (pymupdf4llm)
+engine: Rápido (pymupdf4llm)
 ---
 ```
 
 Y limpia el cuerpo: colapsa líneas en blanco repetidas y normaliza el formato.
-Desactivalo si querés el Markdown crudo del motor.
+Desactívalo si quieres el Markdown crudo del motor.
 
 ---
 
@@ -77,7 +77,7 @@ Desactivalo si querés el Markdown crudo del motor.
 
 | Motor | Para qué sirve | Tamaño |
 |---|---|---|
-| **Fast (pymupdf4llm)** | Informes, artículos, documentación. Rápido y preciso. | ~30 MB, incluido |
+| **Rápido (pymupdf4llm)** | Informes, artículos, documentación. Rápido y preciso. | ~30 MB, incluido |
 | **ML (marker-pdf)** | PDFs multi-columna, escaneados, con tablas densas. | ~4 GB, opcional |
 
 El `.exe` incluye solo el motor rápido, que cubre todo PDF con texto real.
@@ -95,20 +95,20 @@ que no funcionen.
 
 ## Desde el código fuente
 
-Si preferís correrlo con Python en vez de usar el `.exe`:
+Si prefieres correrlo con Python en vez de usar el `.exe`:
 
-1. Descargá el ZIP del repo (**Code → Download ZIP**) y descomprimilo.
+1. Descarga el ZIP del repo (**Code → Download ZIP**) y descomprímelo.
 2. Doble clic en **`iniciar.bat`**.
 
 La primera vez tarda 1-2 minutos: crea un entorno virtual e instala las
 dependencias dentro de la carpeta del proyecto. Los siguientes arranques son
 inmediatos.
 
-Requiere **Python 3.10 o superior**. Si no lo tenés, `iniciar.bat` te avisa y
-abre la página de descarga. Al instalarlo, marcá la casilla
+Requiere **Python 3.10 o superior**. Si no lo tienes, `iniciar.bat` te avisa y
+abre la página de descarga. Al instalarlo, marca la casilla
 **"Add python.exe to PATH"**.
 
-Nada se instala fuera de la carpeta. Para desinstalar, borrala y listo.
+Nada se instala fuera de la carpeta. Para desinstalar, bórrala y listo.
 
 ### Construir el ejecutable
 
@@ -121,7 +121,7 @@ empaquetado está en [`ConversorPDF.spec`](ConversorPDF.spec), que además
 descarta el analizador de layout de PyMuPDF: son ~50 MB en modelos ONNX que
 la app no usa, porque fija `use_layout(False)`.
 
-Reconstruilo cada vez que cambies `pdf2md_app.py`.
+Reconstrúyelo cada vez que cambies `pdf2md_app.py`.
 
 ---
 
@@ -129,11 +129,11 @@ Reconstruilo cada vez que cambies `pdf2md_app.py`.
 
 | Síntoma | Solución |
 |---|---|
-| El `.exe` no abre y no dice nada | Esperá unos segundos: el primer arranque descomprime el programa. |
-| "No se encontró Python" (código fuente) | Instalá Python y marcá "Add python.exe to PATH". |
-| Falla la instalación de dependencias | Revisá la conexión. Si tu Python es muy nuevo (3.14+), instalá 3.12, borrá `.venv` y reintentá. |
-| La app no abre desde `iniciar.bat` | Borrá la carpeta `.venv` y ejecutalo de nuevo. |
-| Un PDF sale mal convertido | Probá el otro motor. Los escaneados necesitan el motor ML. |
+| El `.exe` no abre y no dice nada | Espera unos segundos: el primer arranque descomprime el programa. |
+| "No se encontró Python" (código fuente) | Instala Python y marca "Add python.exe to PATH". |
+| Falla la instalación de dependencias | Revisa la conexión. Si tu Python es muy nuevo (3.14+), instala 3.12, borra `.venv` y reintenta. |
+| La app no abre desde `iniciar.bat` | Borra la carpeta `.venv` y ejecútalo de nuevo. |
+| Un PDF sale mal convertido | Prueba el otro motor. Los escaneados necesitan el motor ML. |
 
 ---
 
@@ -146,5 +146,5 @@ Python + Tkinter, en un único archivo: [`pdf2md_app.py`](pdf2md_app.py).
 - **Arrastrar y soltar**: [tkinterdnd2](https://github.com/pmgagne/tkinterdnd2).
 - **Empaquetado**: [PyInstaller](https://pyinstaller.org).
 
-Las conversiones corren en un `ThreadPoolExecutor` de dos hilos, con la UI
-informando progreso por una cola de mensajes.
+Las conversiones corren en un `ThreadPoolExecutor` de dos hilos, con la ventana
+informando el progreso a través de una cola de mensajes.

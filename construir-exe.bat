@@ -15,15 +15,15 @@ echo    Construir el ejecutable (.exe)
 echo  ══════════════════════════════════════════════════════
 echo.
 echo  Genera UN SOLO archivo que funciona en cualquier PC
-echo  con Windows, sin instalar Python ni nada mas.
+echo  con Windows, sin instalar Python ni nada más.
 echo.
-echo  Tarda 1-3 minutos. Volvé a ejecutarlo cada vez que
+echo  Tarda 1-3 minutos. Vuelve a ejecutarlo cada vez que
 echo  cambies pdf2md_app.py.
 echo.
 
 if not exist "%PY_EXE%" (
     echo  [X] No existe el entorno virtual.
-    echo      Ejecutá primero iniciar.bat.
+    echo      Ejecuta primero iniciar.bat.
     echo.
     pause
     exit /b 1
@@ -54,7 +54,7 @@ echo  ════════════════════════�
 echo.
 for %%F in ("%SALIDA%") do echo    %%~fF  (%%~zF bytes)
 echo.
-echo  Es un archivo unico y autonomo: se puede subir, enviar
+echo  Es un archivo único y autónomo: se puede subir, enviar
 echo  o copiar tal cual. No necesita carpetas al lado.
 echo.
 

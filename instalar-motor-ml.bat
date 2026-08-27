@@ -31,7 +31,7 @@ echo.
 
 if not exist "%PY_EXE%" (
     echo  [X] No existe el entorno virtual.
-    echo      Ejecutá primero iniciar.bat.
+    echo      Ejecuta primero iniciar.bat.
     echo.
     pause
     exit /b 1
@@ -44,8 +44,8 @@ if errorlevel 1 (
     echo      depende marker-pdf — todavía no publica versiones
     echo      compatibles.
     echo.
-    echo      Para usar el motor ML: instalá Python 3.12, borrá
-    echo      la carpeta .venv y volvé a ejecutar iniciar.bat.
+    echo      Para usar el motor ML: instala Python 3.12, borra
+    echo      la carpeta .venv y vuelve a ejecutar iniciar.bat.
     echo.
     pause
     exit /b 1
@@ -58,8 +58,8 @@ if errorlevel 1 goto :error
 
 echo.
 echo  OK — Motor ML instalado.
-echo  Abrí la app con iniciar.bat: aparecerá como segunda
-echo  opción en "Motor de Conversión".
+echo  Abre la app con iniciar.bat: aparecerá como segunda
+echo  opción en "Motor de conversión".
 echo.
 pause
 exit /b 0
@@ -74,7 +74,7 @@ exit /b 0
 :error
 echo.
 echo  [X] Falló la instalación.
-echo      Revisá el detalle del error más arriba.
+echo      Revisa el detalle del error más arriba.
 echo.
 pause
 exit /b 1

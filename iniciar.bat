@@ -85,10 +85,10 @@ rem ── Errores ────────────────────�
 echo.
 echo  [X] No se encontró Python 3.10 o superior en este equipo.
 echo.
-echo      1. Descargalo desde https://www.python.org/downloads/
-echo      2. Durante la instalación, marcá la casilla
-echo         "Add python.exe to PATH"  (es fácil de pasar por alto)
-echo      3. Volvé a ejecutar este archivo.
+echo      1. Descárgalo desde https://www.python.org/downloads/
+echo      2. Durante la instalación, marca la casilla
+echo         "Add python.exe to PATH"  (es fácil pasarla por alto)
+echo      3. Vuelve a ejecutar este archivo.
 echo.
 echo      Se abrirá la página de descarga en tu navegador...
 echo.
@@ -103,7 +103,7 @@ echo.
 echo      Suele deberse a una instalación de Python incompleta
 echo      o a permisos de escritura en esta carpeta.
 echo.
-echo      Probá mover la carpeta a Documentos o al Escritorio
+echo      Prueba mover la carpeta a Documentos o al Escritorio
 echo      y ejecutar de nuevo.
 echo.
 pause
@@ -117,7 +117,7 @@ echo      Causas habituales:
 echo        - Sin conexión a internet o proxy bloqueando pip.
 echo        - Tu versión de Python es demasiado reciente y
 echo          todavía no hay paquetes compilados para ella.
-echo          En ese caso, instalá Python 3.12 y borrá la
+echo          En ese caso, instala Python 3.12 y borra la
 echo          carpeta .venv antes de reintentar.
 echo.
 echo      El detalle del error está más arriba.

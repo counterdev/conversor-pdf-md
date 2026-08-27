@@ -27,16 +27,8 @@ from tkinterdnd2 import TkinterDnD
 warnings.filterwarnings("ignore", message="Unsupported Windows version")
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Utilidades
 # ---------------------------------------------------------------------------
-
-def format_size(n_bytes: int) -> str:
-    for unit in ("B", "KB", "MB", "GB"):
-        if n_bytes < 1024:
-            return f"{n_bytes:.1f} {unit}"
-        n_bytes /= 1024
-    return f"{n_bytes:.1f} TB"
-
 
 def normalize_highlights(md_text: str) -> str:
     """Pasa el resaltado de <mark> a la sintaxis ==texto== de Markdown."""
@@ -44,7 +36,7 @@ def normalize_highlights(md_text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Plain Text Converter
+# Conversor a texto plano
 # ---------------------------------------------------------------------------
 
 class PlainTextConverter:
@@ -152,8 +144,17 @@ class PlainTextConverter:
         return "\n".join(out) + "\n"
 
 
+class JobStatus:
+    """Estados de un trabajo. El texto se muestra tal cual en la cola."""
+
+    WAITING = "En espera"
+    CONVERTING = "Convirtiendo..."
+    DONE = "Listo"
+    CANCELLED = "Cancelado"
+
+
 # ---------------------------------------------------------------------------
-# Obsidian Post-Processor
+# Post-proceso para Obsidian
 # ---------------------------------------------------------------------------
 
 class ObsidianPostProcessor:
@@ -187,7 +188,7 @@ class ObsidianPostProcessor:
         for line in lines:
             stripped = line.rstrip()
 
-            # Collapse multiple blank lines into one
+            # Varias lineas en blanco seguidas se reducen a una
             is_blank = stripped == ""
             if is_blank and prev_blank:
                 continue
@@ -195,7 +196,7 @@ class ObsidianPostProcessor:
 
             cleaned.append(stripped)
 
-        # Strip leading/trailing blank lines
+        # Sin lineas en blanco al principio ni al final
         while cleaned and cleaned[0] == "":
             cleaned.pop(0)
         while cleaned and cleaned[-1] == "":
@@ -205,7 +206,7 @@ class ObsidianPostProcessor:
 
 
 # ---------------------------------------------------------------------------
-# Conversion Engine Layer (Strategy Pattern)
+# Motores de conversion (patron Strategy)
 # ---------------------------------------------------------------------------
 
 class ConversionEngine(ABC):
@@ -231,7 +232,7 @@ class ConversionEngine(ABC):
 
 class PyMuPDF4LLMEngine(ConversionEngine):
     engine_id = "pymupdf4llm"
-    display_name = "Fast (pymupdf4llm)"
+    display_name = "Rápido (pymupdf4llm)"
     description = "PDFs normales: informes, artículos, documentación. Rápido y preciso."
 
     @classmethod
@@ -270,7 +271,7 @@ class MarkerPDFEngine(ConversionEngine):
         except ImportError as e:
             raise RuntimeError(
                 "marker-pdf no está instalado correctamente. "
-                "Ejecutá: pip install marker-pdf"
+                "Ejecuta: instalar-motor-ml.bat"
             ) from e
 
         try:
@@ -282,7 +283,7 @@ class MarkerPDFEngine(ConversionEngine):
             if "ConnectTimeout" in msg or "IncompleteRead" in msg or "Max retries" in msg:
                 raise RuntimeError(
                     "No se pudieron descargar los modelos ML. "
-                    "Verificá tu conexión a internet e intentá de nuevo.\n\n"
+                    "Verifica tu conexión a internet e intenta de nuevo.\n\n"
                     "Los modelos se descargan una sola vez (~1.5GB).\n"
                     f"Error original: {msg[:200]}"
                 ) from e
@@ -367,7 +368,7 @@ def get_available_engines() -> dict[str, ConversionEngine]:
 
 
 # ---------------------------------------------------------------------------
-# Conversion Job
+# Trabajo de conversion
 # ---------------------------------------------------------------------------
 
 @dataclass
@@ -377,13 +378,14 @@ class ConversionJob:
     output_dir: Path | None = None
     obsidian_mode: bool = False
     output_format: str = "md"
-    status: str = "Waiting..."
+    status: str = JobStatus.WAITING
     result: str | None = None
     error: str | None = None
+    row_id: str = ""  # fila que le corresponde en la cola
 
 
 # ---------------------------------------------------------------------------
-# Conversion Manager (Background Threading)
+# Coordinador de conversiones (hilos en segundo plano)
 # ---------------------------------------------------------------------------
 
 class ConversionManager:
@@ -391,6 +393,7 @@ class ConversionManager:
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
         self._message_queue: queue.Queue = queue.Queue()
         self._cancel_event = threading.Event()
+        self._lock = threading.Lock()
         self._futures: list[Future] = []
         self._total = 0
         self._completed = 0
@@ -425,25 +428,31 @@ class ConversionManager:
 
     def _convert_job(self, job: ConversionJob, engine: ConversionEngine) -> None:
         if self._cancel_event.is_set():
-            job.status = "Cancelled"
+            job.status = JobStatus.CANCELLED
+            self._count_processed()
             self._message_queue.put(("cancelled", job))
             return
 
         try:
-            job.status = "Converting..."
+            job.status = JobStatus.CONVERTING
             self._message_queue.put(("progress", job))
 
             md_text = engine.convert(job.pdf_path)
             job.result = md_text
-            job.status = "Done"
-            self._completed += 1
+            job.status = JobStatus.DONE
+            self._count_processed()
             self._message_queue.put(("done", job))
 
         except Exception as exc:
             job.status = f"Error: {exc}"
             job.error = traceback.format_exc()
-            self._completed += 1
+            self._count_processed()
             self._message_queue.put(("error", job, exc))
+
+    def _count_processed(self) -> None:
+        """Suma un trabajo terminado. Lo llaman los hilos de conversion."""
+        with self._lock:
+            self._completed += 1
 
     def cancel(self) -> None:
         self._cancel_event.set()
@@ -453,7 +462,7 @@ class ConversionManager:
 
 
 # ---------------------------------------------------------------------------
-# UI — Drop Target Frame
+# Interfaz — Zona de arrastre
 # ---------------------------------------------------------------------------
 
 class DropTargetFrame(ttk.Frame):
@@ -476,7 +485,7 @@ class DropTargetFrame(ttk.Frame):
 
         self._text_id = canvas.create_text(
             450, 45,
-            text="Soltá tus archivos PDF acá\n— o —\nHacé clic en Browse...",
+            text="Suelta tus archivos PDF aquí\n— o —\nHaz clic en Agregar archivos...",
             font=("Segoe UI", 11), fill="#5b6b7c", justify="center"
         )
 
@@ -514,13 +523,14 @@ class DropTargetFrame(ttk.Frame):
 
 
 # ---------------------------------------------------------------------------
-# UI — File Queue Frame
+# Interfaz — Cola de archivos
 # ---------------------------------------------------------------------------
 
 class FileQueueFrame(ttk.LabelFrame):
     def __init__(self, parent: ttk.Frame):
         super().__init__(parent, text="Archivos", padding=4)
-        self._jobs: list[ConversionJob] = []
+        self._jobs: dict[str, ConversionJob] = {}
+        self._row_count = 0
         self._on_queue_changed: Callable[[], None] | None = None
 
         self._tree: ttk.Treeview | None = None
@@ -560,23 +570,23 @@ class FileQueueFrame(ttk.LabelFrame):
 
     def add_files(self, paths: list[Path]) -> None:
         for p in paths:
-            job = ConversionJob(pdf_path=p, engine_id="pymupdf4llm")
-            self._jobs.append(job)
+            self._row_count += 1
+            row_id = f"job{self._row_count}"
+            job = ConversionJob(pdf_path=p, engine_id="pymupdf4llm", row_id=row_id)
+            self._jobs[row_id] = job
             self._tree.insert(
-                "", "end",
-                values=(len(self._jobs), p.name, "Waiting..."),
-                iid=str(id(job))
+                "", "end", iid=row_id,
+                values=(len(self._jobs), p.name, JobStatus.WAITING),
             )
         self._update_count()
         if self._on_queue_changed:
             self._on_queue_changed()
 
     def remove_selected(self) -> None:
-        selected = self._tree.selection()
-        for iid in selected:
-            job = self._find_job_by_iid(iid)
-            if job and job.status not in ("Converting...",):
-                self._jobs.remove(job)
+        for iid in self._tree.selection():
+            job = self._jobs.get(iid)
+            if job and job.status != JobStatus.CONVERTING:
+                del self._jobs[iid]
                 self._tree.delete(iid)
         self._renumber()
         self._update_count()
@@ -584,54 +594,39 @@ class FileQueueFrame(ttk.LabelFrame):
             self._on_queue_changed()
 
     def clear_completed(self) -> None:
-        to_remove = [j for j in self._jobs if j.status not in ("Waiting...", "Converting...")]
-        for job in to_remove:
-            for iid in self._tree.get_children():
-                if self._tree.item(iid)["values"][1] == job.pdf_path.name:
-                    self._tree.delete(iid)
-                    break
-            self._jobs.remove(job)
+        en_curso = (JobStatus.WAITING, JobStatus.CONVERTING)
+        for iid, job in list(self._jobs.items()):
+            if job.status not in en_curso:
+                del self._jobs[iid]
+                self._tree.delete(iid)
         self._renumber()
         self._update_count()
 
     def clear_all(self) -> None:
-        to_remove = [j for j in self._jobs if j.status != "Converting..."]
-        for job in to_remove:
-            for iid in self._tree.get_children():
-                if self._tree.item(iid)["values"][1] == job.pdf_path.name:
-                    self._tree.delete(iid)
-                    break
-            self._jobs.remove(job)
+        for iid, job in list(self._jobs.items()):
+            if job.status != JobStatus.CONVERTING:
+                del self._jobs[iid]
+                self._tree.delete(iid)
         self._renumber()
         self._update_count()
         if self._on_queue_changed:
             self._on_queue_changed()
 
     def get_pending_jobs(self) -> list[ConversionJob]:
-        return [j for j in self._jobs if j.status == "Waiting..."]
+        return [j for j in self._jobs.values() if j.status == JobStatus.WAITING]
 
     def get_all_jobs(self) -> list[ConversionJob]:
-        return list(self._jobs)
+        return list(self._jobs.values())
 
     def update_job_status(self, job: ConversionJob) -> None:
-        for iid, values in [(i, self._tree.item(i)["values"]) for i in self._tree.get_children()]:
-            if values[1] == job.pdf_path.name:
-                self._tree.set(iid, "status", job.status)
-                self._renumber()
-                break
+        if job.row_id and self._tree.exists(job.row_id):
+            self._tree.set(job.row_id, "status", job.status)
 
     def _renumber(self) -> None:
         for idx, iid in enumerate(self._tree.get_children(), start=1):
             values = list(self._tree.item(iid)["values"])
             values[0] = idx
             self._tree.item(iid, values=values)
-
-    def _find_job_by_iid(self, iid: str) -> ConversionJob | None:
-        filename = self._tree.item(iid)["values"][1]
-        for j in self._jobs:
-            if j.pdf_path.name == filename:
-                return j
-        return None
 
     def _on_delete_key(self, _event) -> None:
         self.remove_selected()
@@ -643,12 +638,12 @@ class FileQueueFrame(ttk.LabelFrame):
 
 
 # ---------------------------------------------------------------------------
-# UI — Engine Selector Frame
+# Interfaz — Selector de motor
 # ---------------------------------------------------------------------------
 
 class EngineSelectorFrame(ttk.LabelFrame):
     def __init__(self, parent: ttk.Frame):
-        super().__init__(parent, text="Motor de Conversión", padding=4)
+        super().__init__(parent, text="Motor de conversión", padding=4)
         self._var = tk.StringVar(value="pymupdf4llm")
         self._on_change: Callable[[str], None] | None = None
 
@@ -672,7 +667,7 @@ class EngineSelectorFrame(ttk.LabelFrame):
 
         ml_text = MarkerPDFEngine.display_name
         if not ml_avail:
-            ml_text += "  [No instalado — pip install marker-pdf]"
+            ml_text += "  [No instalado — usa instalar-motor-ml.bat]"
 
         self._rb_ml = ttk.Radiobutton(
             self, text=ml_text, variable=self._var,
@@ -717,12 +712,12 @@ class EngineSelectorFrame(ttk.LabelFrame):
 
 
 # ---------------------------------------------------------------------------
-# UI — Output Selector Frame
+# Interfaz — Selector de salida
 # ---------------------------------------------------------------------------
 
 class OutputSelectorFrame(ttk.LabelFrame):
     def __init__(self, parent: ttk.Frame):
-        super().__init__(parent, text="Salida y Formato", padding=4)
+        super().__init__(parent, text="Salida y formato", padding=4)
         self._var = tk.StringVar(value="same")
         self._obsidian_var = tk.BooleanVar(value=True)
         self._format_var = tk.StringVar(value="md")
@@ -752,7 +747,7 @@ class OutputSelectorFrame(ttk.LabelFrame):
         self._custom_entry.pack(side="left", padx=(6, 4))
 
         self._browse_btn = ttk.Button(
-            custom_frame, text="Browse...",
+            custom_frame, text="Elegir...",
             command=self._browse, state="disabled"
         )
         self._browse_btn.pack(side="left")
@@ -795,7 +790,7 @@ class OutputSelectorFrame(ttk.LabelFrame):
             self._browse_btn.configure(state=state)
 
     def _browse(self) -> None:
-        path = filedialog.askdirectory(title="Seleccioná carpeta de salida")
+        path = filedialog.askdirectory(title="Selecciona la carpeta de salida")
         if path and self._custom_entry:
             self._custom_entry.delete(0, "end")
             self._custom_entry.insert(0, path)
@@ -844,7 +839,7 @@ class OutputSelectorFrame(ttk.LabelFrame):
 
 
 # ---------------------------------------------------------------------------
-# UI — Progress Frame
+# Interfaz — Progreso
 # ---------------------------------------------------------------------------
 
 class ProgressFrame(ttk.Frame):
@@ -892,14 +887,14 @@ class ProgressFrame(ttk.Frame):
 
 
 # ---------------------------------------------------------------------------
-# Main Window
+# Ventana principal
 # ---------------------------------------------------------------------------
 
 class MainWindow(TkinterDnD.Tk):
     def __init__(self):
         super().__init__()
 
-        self.title("PDF to Markdown Converter")
+        self.title("Conversor PDF a Markdown")
         self.minsize(900, 650)
         self.geometry("920x700")
 
@@ -930,17 +925,17 @@ class MainWindow(TkinterDnD.Tk):
         except tk.TclError:
             pass
 
-    # -- Build UI ----------------------------------------------------------
+    # -- Construccion de la interfaz ---------------------------------------
 
     def _build_ui(self) -> None:
-        # Top bar with Browse / Clear
+        # Barra superior: agregar archivos y vaciar la cola
         top_bar = ttk.Frame(self)
         top_bar.pack(fill="x", padx=8, pady=(8, 0))
 
-        browse_btn = ttk.Button(top_bar, text="Browse Files...", command=self._browse_files)
+        browse_btn = ttk.Button(top_bar, text="Agregar archivos...", command=self._browse_files)
         browse_btn.pack(side="left", padx=(0, 6))
 
-        clear_btn = ttk.Button(top_bar, text="Clear Queue", command=self._clear_queue)
+        clear_btn = ttk.Button(top_bar, text="Vaciar cola", command=self._clear_queue)
         clear_btn.pack(side="left")
 
         # Drop zone
@@ -968,29 +963,29 @@ class MainWindow(TkinterDnD.Tk):
         self._progress_frame.pack(fill="x", padx=8, pady=(6, 0))
         self._progress_frame.set_on_cancel(self._cancel_conversion)
 
-        # Action buttons
+        # Botones de accion
         action_bar = ttk.Frame(self)
         action_bar.pack(fill="x", padx=8, pady=(6, 4))
 
         self._start_btn = ttk.Button(
-            action_bar, text="Iniciar Conversión",
+            action_bar, text="Iniciar conversión",
             command=self._start_conversion
         )
         self._start_btn.pack(side="left")
 
-        # Status bar
+        # Barra de estado
         self._status_bar = ttk.Label(
-            self, text="Listo. Cargá archivos PDF para comenzar.",
+            self, text="Listo. Agrega archivos PDF para comenzar.",
             font=("Segoe UI", 9), anchor="w",
             relief="sunken", padding=(6, 3)
         )
         self._status_bar.pack(fill="x", side="bottom")
 
-    # -- Event Handlers ----------------------------------------------------
+    # -- Manejadores de eventos --------------------------------------------
 
     def _browse_files(self) -> None:
         paths = filedialog.askopenfilenames(
-            title="Seleccioná archivos PDF",
+            title="Selecciona archivos PDF",
             filetypes=[("PDF Files", "*.pdf"), ("All Files", "*.*")]
         )
         if paths:
@@ -1029,8 +1024,8 @@ class MainWindow(TkinterDnD.Tk):
             messagebox.showerror(
                 "Motor no disponible",
                 f"El motor '{engine_id}' no está instalado.\n\n"
-                "Instalalo con: pip install marker-pdf\n"
-                "O seleccioná el motor rápido (pymupdf4llm)."
+                "Instálalo con instalar-motor-ml.bat\n"
+                "o selecciona el motor rápido (pymupdf4llm)."
             )
             return
 
@@ -1041,7 +1036,7 @@ class MainWindow(TkinterDnD.Tk):
             messagebox.showinfo("Sin archivos", "No hay archivos PDF en cola para convertir.")
             return
 
-        # Assign engine + output + format + obsidian mode
+        # Cada trabajo recibe motor, destino, formato y modo Obsidian
         obsidian_mode = self._output_frame.get_obsidian_mode() if self._output_frame else True
         output_format = self._output_frame.get_output_format() if self._output_frame else "md"
         for job in jobs:
@@ -1077,7 +1072,6 @@ class MainWindow(TkinterDnD.Tk):
                 if msg_type == "done":
                     self._write_output(job)
                 elif msg_type == "error":
-                    exc = msg[2] if len(msg) > 2 else None
                     self._set_status(f"Error en {job.pdf_path.name}: {job.status}")
 
         except queue.Empty:
@@ -1090,10 +1084,9 @@ class MainWindow(TkinterDnD.Tk):
             f"Completado: {completed} de {total} archivo(s)"
         )
 
-        # Check if all done
-        all_queued = self._queue_frame.get_pending_jobs() if self._queue_frame else []
+        # Ver si ya termino todo
         still_working = [j for j in (self._queue_frame.get_all_jobs() if self._queue_frame else [])
-                         if j.status == "Converting..."]
+                         if j.status == JobStatus.CONVERTING]
 
         if not still_working and completed >= total:
             self._finish_conversion()
@@ -1108,14 +1101,17 @@ class MainWindow(TkinterDnD.Tk):
         output_dir = job.output_dir or job.pdf_path.parent
         try:
             output_dir.mkdir(parents=True, exist_ok=True)
-        except OSError:
+        except OSError as exc:
+            job.status = f"Error al crear la carpeta: {exc}"
+            if self._queue_frame:
+                self._queue_frame.update_job_status(job)
             return
 
         stem = job.pdf_path.stem
         extension = "txt" if job.output_format == "txt" else "md"
         out_path = output_dir / f"{stem}.{extension}"
 
-        # Handle collisions
+        # Evitar pisar un archivo existente
         counter = 1
         while out_path.exists():
             out_path = output_dir / f"{stem}_{counter}.{extension}"
@@ -1157,7 +1153,7 @@ class MainWindow(TkinterDnD.Tk):
             self._set_status(f"Conversión completada. {total} archivo(s) procesado(s).")
             self._progress_frame.set_label(f"¡Listo! {total} archivo(s) convertido(s).")
 
-        # Optional notification
+        # Aviso sonoro, si el sistema lo permite
         try:
             self.bell()
         except tk.TclError:
@@ -1169,7 +1165,7 @@ class MainWindow(TkinterDnD.Tk):
             self._progress_frame.set_label("Cancelando...")
             self._set_status("Cancelando conversión...")
 
-    # -- UI State Management ------------------------------------------------
+    # -- Estado de los controles --------------------------------------------
 
     def _disable_inputs(self) -> None:
         if self._start_btn:
@@ -1193,7 +1189,7 @@ class MainWindow(TkinterDnD.Tk):
 
 
 # ---------------------------------------------------------------------------
-# Entry Point
+# Punto de entrada
 # ---------------------------------------------------------------------------
 
 def main() -> None:
@@ -1205,7 +1201,7 @@ def main() -> None:
         messagebox.showerror(
             "Dependencia Faltante",
             "pymupdf4llm no está instalado.\n\n"
-            "Ejecutá: pip install pymupdf4llm\n\n"
+            "Ejecuta: pip install pymupdf4llm\n\n"
             "La aplicación se cerrará."
         )
         sys.exit(1)
