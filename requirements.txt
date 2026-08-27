@@ -1,0 +1,8 @@
+# Dependencias del Conversor PDF a Markdown.
+# Se instalan solas al ejecutar iniciar.bat por primera vez.
+
+# Motor rapido: extraccion de texto y layout a Markdown
+pymupdf4llm
+
+# Soporte para arrastrar y soltar archivos en la ventana
+tkinterdnd2

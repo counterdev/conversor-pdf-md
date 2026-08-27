@@ -6,8 +6,10 @@ Motor rápido: pymupdf4llm | Motor ML: marker-pdf (opcional)
 """
 
 import os
+import re
 import sys
 import queue
+import multiprocessing
 import threading
 import traceback
 import warnings
@@ -34,6 +36,120 @@ def format_size(n_bytes: int) -> str:
             return f"{n_bytes:.1f} {unit}"
         n_bytes /= 1024
     return f"{n_bytes:.1f} TB"
+
+
+def normalize_highlights(md_text: str) -> str:
+    """Pasa el resaltado de <mark> a la sintaxis ==texto== de Markdown."""
+    return re.sub(r"</?mark>", "==", md_text, flags=re.IGNORECASE)
+
+
+# ---------------------------------------------------------------------------
+# Plain Text Converter
+# ---------------------------------------------------------------------------
+
+class PlainTextConverter:
+    """Convierte el Markdown del motor a texto plano legible.
+
+    Quita la sintaxis (encabezados, negritas, enlaces, tablas) pero conserva
+    la estructura: los titulos quedan separados por lineas en blanco y las
+    listas mantienen su vineta.
+    """
+
+    _INLINE = [
+        (re.compile(r"!\[[^\]]*\]\([^)]*\)"), ""),                  # imagenes
+        (re.compile(r"\[([^\]]*)\]\([^)]*\)"), r"\1"),              # enlaces: solo el texto
+        (re.compile(r"</?(?:mark|u|b|i|em|strong|br\s*/?)>", re.I), ""),
+        (re.compile(r"\*\*\*(.+?)\*\*\*", re.S), r"\1"),
+        (re.compile(r"\*\*(.+?)\*\*", re.S), r"\1"),
+        (re.compile(r"~~(.+?)~~", re.S), r"\1"),
+        (re.compile(r"==(.+?)==", re.S), r"\1"),
+        (re.compile(r"(?<!\w)_([^_]+)_(?!\w)"), r"\1"),
+        (re.compile(r"(?<!\*)\*([^*\n]+)\*(?!\*)"), r"\1"),
+        (re.compile(r"`([^`]*)`"), r"\1"),
+    ]
+
+    _RULE = re.compile(r"\s*([-*_])\s*(\1\s*){2,}")
+    _TABLE_SEP = re.compile(r"\s*\|?[\s:|-]*\|[\s:|-]*")
+    _HEADING = re.compile(r"\s{0,3}(#{1,6})\s+(.*)")
+    _QUOTE = re.compile(r"^\s{0,3}>\s?")
+    _BULLET = re.compile(r"^(\s*)[*+]\s+")
+    # Solo espacios, nunca tabs: las tablas usan tab como separador de celdas
+    _GAP = re.compile(r" {2,}")
+    _SPACE_BEFORE_PUNCT = re.compile(r" +([,.;:!?])")
+
+    @staticmethod
+    def process(md_text: str) -> str:
+        lines: list[str] = []
+        in_code = False
+
+        for raw in md_text.splitlines():
+            line = raw.rstrip()
+
+            # Cercas de bloque de codigo: se quitan, el contenido se conserva
+            if line.lstrip().startswith("```"):
+                in_code = not in_code
+                continue
+            if in_code:
+                lines.append(line)
+                continue
+
+            # Separadores horizontales
+            if line.strip() and PlainTextConverter._RULE.fullmatch(line):
+                lines.append("")
+                continue
+
+            # Fila separadora de tablas (|---|---|)
+            if "-" in line and PlainTextConverter._TABLE_SEP.fullmatch(line):
+                continue
+
+            # Filas de tabla: celdas separadas por tabulacion
+            if line.strip().startswith("|"):
+                cells = [c.strip() for c in line.strip().strip("|").split("|")]
+                line = "\t".join(cells)
+
+            # Encabezados: quedan como linea suelta, con aire alrededor
+            heading = PlainTextConverter._HEADING.match(line)
+            if heading:
+                lines.append("")
+                lines.append(PlainTextConverter._inline(heading.group(2).rstrip("# ")))
+                lines.append("")
+                continue
+
+            line = PlainTextConverter._QUOTE.sub("", line)      # citas
+            line = PlainTextConverter._BULLET.sub(r"\1- ", line)  # vinetas al guion
+
+            lines.append(PlainTextConverter._inline(line))
+
+        return PlainTextConverter._collapse(lines)
+
+    @staticmethod
+    def _inline(text: str) -> str:
+        for pattern, repl in PlainTextConverter._INLINE:
+            text = pattern.sub(repl, text)
+
+        # Cerrar los huecos que dejan las imagenes y marcas eliminadas,
+        # respetando la sangria con la que empieza la linea
+        indent = len(text) - len(text.lstrip(" "))
+        body = PlainTextConverter._GAP.sub(" ", text[indent:])
+        body = PlainTextConverter._SPACE_BEFORE_PUNCT.sub(r"\1", body)
+        return text[:indent] + body.rstrip()
+
+    @staticmethod
+    def _collapse(lines: list[str]) -> str:
+        out: list[str] = []
+        prev_blank = True  # arranca en True para no dejar blancos al inicio
+
+        for line in lines:
+            blank = not line.strip()
+            if blank and prev_blank:
+                continue
+            prev_blank = blank
+            out.append("" if blank else line)
+
+        while out and not out[-1]:
+            out.pop()
+
+        return "\n".join(out) + "\n"
 
 
 # ---------------------------------------------------------------------------
@@ -260,6 +376,7 @@ class ConversionJob:
     engine_id: str
     output_dir: Path | None = None
     obsidian_mode: bool = False
+    output_format: str = "md"
     status: str = "Waiting..."
     result: str | None = None
     error: str | None = None
@@ -608,9 +725,11 @@ class OutputSelectorFrame(ttk.LabelFrame):
         super().__init__(parent, text="Salida y Formato", padding=4)
         self._var = tk.StringVar(value="same")
         self._obsidian_var = tk.BooleanVar(value=True)
+        self._format_var = tk.StringVar(value="md")
 
         self._custom_entry: ttk.Entry | None = None
         self._browse_btn: ttk.Button | None = None
+        self._obsidian_cb: ttk.Checkbutton | None = None
         self._build_ui()
 
     def _build_ui(self) -> None:
@@ -638,16 +757,35 @@ class OutputSelectorFrame(ttk.LabelFrame):
         )
         self._browse_btn.pack(side="left")
 
+        # Formato del archivo de salida
+        sep_fmt = ttk.Separator(self, orient="horizontal")
+        sep_fmt.pack(fill="x", pady=(8, 4))
+
+        fmt_frame = ttk.Frame(self)
+        fmt_frame.pack(anchor="w", fill="x")
+
+        ttk.Label(fmt_frame, text="Formato:").pack(side="left", padx=(0, 8))
+
+        ttk.Radiobutton(
+            fmt_frame, text="Markdown (.md)",
+            variable=self._format_var, value="md", command=self._on_format_toggle
+        ).pack(side="left")
+
+        ttk.Radiobutton(
+            fmt_frame, text="Texto plano (.txt)",
+            variable=self._format_var, value="txt", command=self._on_format_toggle
+        ).pack(side="left", padx=(10, 0))
+
         # Obsidian toggle
         sep = ttk.Separator(self, orient="horizontal")
         sep.pack(fill="x", pady=(8, 4))
 
-        obsidian_cb = ttk.Checkbutton(
+        self._obsidian_cb = ttk.Checkbutton(
             self,
             text="Modo Obsidian (frontmatter YAML + tags + formato limpio)",
             variable=self._obsidian_var,
         )
-        obsidian_cb.pack(anchor="w")
+        self._obsidian_cb.pack(anchor="w")
 
     def _on_toggle(self) -> None:
         state = "normal" if self._var.get() == "custom" else "disabled"
@@ -669,12 +807,24 @@ class OutputSelectorFrame(ttk.LabelFrame):
                 return Path(custom)
         return source_pdf.parent
 
+    def _on_format_toggle(self) -> None:
+        # El modo Obsidian solo tiene sentido sobre Markdown
+        if self._obsidian_cb:
+            state = "disabled" if self._format_var.get() == "txt" else "normal"
+            self._obsidian_cb.configure(state=state)
+
+    def get_output_format(self) -> str:
+        return self._format_var.get()
+
     def get_obsidian_mode(self) -> bool:
         return self._obsidian_var.get()
 
     def enable(self) -> None:
         children = self.winfo_children()
         self._traverse_enable(children, True)
+        # Rehabilitar todo a ciegas activaria controles que no corresponden
+        self._on_toggle()
+        self._on_format_toggle()
 
     def disable(self) -> None:
         children = self.winfo_children()
@@ -891,11 +1041,13 @@ class MainWindow(TkinterDnD.Tk):
             messagebox.showinfo("Sin archivos", "No hay archivos PDF en cola para convertir.")
             return
 
-        # Assign engine + output + obsidian mode
+        # Assign engine + output + format + obsidian mode
         obsidian_mode = self._output_frame.get_obsidian_mode() if self._output_frame else True
+        output_format = self._output_frame.get_output_format() if self._output_frame else "md"
         for job in jobs:
             job.engine_id = engine_id
             job.obsidian_mode = obsidian_mode
+            job.output_format = output_format
             if self._output_frame:
                 job.output_dir = self._output_frame.get_output_dir(job.pdf_path)
 
@@ -960,20 +1112,16 @@ class MainWindow(TkinterDnD.Tk):
             return
 
         stem = job.pdf_path.stem
-        out_path = output_dir / f"{stem}.md"
+        extension = "txt" if job.output_format == "txt" else "md"
+        out_path = output_dir / f"{stem}.{extension}"
 
         # Handle collisions
         counter = 1
         while out_path.exists():
-            out_path = output_dir / f"{stem}_{counter}.md"
+            out_path = output_dir / f"{stem}_{counter}.{extension}"
             counter += 1
 
-        # Apply Obsidian post-processing if enabled
-        content = job.result
-        if job.obsidian_mode:
-            engine = self._engine
-            engine_name = engine.display_name if engine else "pymupdf4llm"
-            content = ObsidianPostProcessor.process(job.result, job.pdf_path, engine_name)
+        content = self._build_content(job)
 
         try:
             out_path.write_text(content, encoding="utf-8")
@@ -981,6 +1129,18 @@ class MainWindow(TkinterDnD.Tk):
             job.status = f"Error al escribir: {exc}"
             if self._queue_frame:
                 self._queue_frame.update_job_status(job)
+
+    def _build_content(self, job: ConversionJob) -> str:
+        """Arma el contenido final segun el formato elegido."""
+        if job.output_format == "txt":
+            return PlainTextConverter.process(job.result or "")
+
+        content = normalize_highlights(job.result or "")
+        if job.obsidian_mode:
+            engine = self._engine
+            engine_name = engine.display_name if engine else "pymupdf4llm"
+            content = ObsidianPostProcessor.process(content, job.pdf_path, engine_name)
+        return content
 
     def _finish_conversion(self) -> None:
         if self._poll_id:
@@ -1037,6 +1197,10 @@ class MainWindow(TkinterDnD.Tk):
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    # Al correr empaquetado como .exe, los subprocesos que abre PyMuPDF
+    # relanzarian la ventana principal si no se prepara multiprocessing.
+    multiprocessing.freeze_support()
+
     if not PyMuPDF4LLMEngine.is_available():
         messagebox.showerror(
             "Dependencia Faltante",

@@ -1,0 +1,9 @@
+# Motor ML opcional (marker-pdf), para PDFs complejos:
+# multi-columna, escaneados o con tablas densas.
+#
+# Instalacion aparte con instalar-motor-ml.bat porque descarga
+# PyTorch (~2.5 GB) y, al primer uso, ~1.5 GB de modelos.
+#
+# Requiere Python 3.10 - 3.13 (PyTorch aun no publica versiones para 3.14).
+
+marker-pdf

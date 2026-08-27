@@ -1,8 +1,18 @@
-*.exe
+# Entorno virtual creado por iniciar.bat
+.venv/
 __pycache__/
+
+# Artefactos de empaquetado
+*.exe
 build/
 dist/
 *.spec
+
+# Scripts locales sueltos (los launchers del proyecto van versionados,
+# ver las excepciones de abajo)
 *.lnk
 *.ps1
 *.bat
+!iniciar.bat
+!instalar-motor-ml.bat
+!construir-exe.bat
