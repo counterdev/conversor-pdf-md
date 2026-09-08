@@ -148,3 +148,7 @@ Python + Tkinter, en un único archivo: [`pdf2md_app.py`](pdf2md_app.py).
 
 Las conversiones corren en un `ThreadPoolExecutor` de dos hilos, con la ventana
 informando el progreso a través de una cola de mensajes.
+
+## Licencia
+
+MIT.
